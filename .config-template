@@ -1,0 +1,11 @@
+temp_path="temp"
+token_refresh_rate_in_sec=3000
+token_red_period_in_sec=42
+scope="xxxxxxxxxxxxxxx"
+metadata_template="xxxxxxxxxxx"
+box_search_limit_result=100000
+insert_metadata_logfile=script.log
+parent_folder_id="xxxxxxxxxxx"
+client_id="xxxxxxxxxxxxxxxxx" 
+client_secret=xxxxxxxxxxxxxxxxxx" 
+excluded_file_extension=".xls .m4a .DS_Store .csv .psd .xlsx .BridgeSort .pdf .mp4 .db .html .htm .gif .apdisk"
