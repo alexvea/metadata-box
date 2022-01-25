@@ -136,7 +136,8 @@ request_to_api_box(){
 check_metadata_in_box() {
         task="CHECK"
         file_id=$1
-        file_box_metadata=$2
+        download_type=$2
+        file_box_metadata=$3
         metadata_check_number=$(echo ${file_box_metadata} |  jq '.'\"$scope\"'.'\"$metadata_template\"''  | jq length )
         #http_response=$(request_to_api_box $task $file_id)
         #metadata_check_number=$(echo ${http_response} | awk '{print $1}')
@@ -152,13 +153,13 @@ check_metadata_in_box() {
         fi
         case $metadata_check_number in
                 8) #cas metadata sur box vide
-                        remove_metadata_from_file $file_id && download_photo_from_box $file_id &
+                        remove_metadata_from_file $file_id && download_photo_from_box $file_id $download_type &
                 ;;
                 0)
-                        download_photo_from_box $file_id &
+                        download_photo_from_box $file_id $download_type &
                 ;;
                 "recreate")
-                        remove_metadata_from_file $file_id && download_photo_from_box $file_id &
+                        remove_metadata_from_file $file_id && download_photo_from_box $file_id $download_type &
 
                 ;;
                 *) #autres cas
@@ -268,6 +269,8 @@ create_metadata_on_file() {
 download_photo_from_box(){
         task="DOWNLOAD"
         file_id=$1
+        download_type=$2
+        [[ $download_type == "full" ]] && task="FULL_DOWNLOAD"
         http_response=$(request_to_api_box $task $file_id)
         create_metadata_on_file $file_id
 }
@@ -405,6 +408,7 @@ scan_box_folder(){
                                 filename=$(basename -- "$item_name")
                                 extension=".${filename##*.}"
                                 [[ $(echo $excluded_file_extension | grep -i $extension) ]] &&  echo $(date) "excluded file : $item_id by rules with $extension extension"  >> $insert_metadata_logfile && continue
+                                [[ $(echo $required_full_download_file_extension | grep -i $extension) ]] &&  download_type="full" ||  download_type="header"
                                 case $action in
                                         "no")
                                                 echo "please precise action"
@@ -413,7 +417,7 @@ scan_box_folder(){
                                                 echo "you can't add and delete at the same time"
                                         ;;
                                         "add")
-                                                check_metadata_in_box $item_id ${item_box_metadata}
+                                                check_metadata_in_box $item_id $download_type ${item_box_metadata}
 
                                         ;;
                                         "delete")
