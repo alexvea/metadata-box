@@ -32,8 +32,8 @@ chlicone_metadata_creation_json=$( cat << EOF
     "auteurs":"Creator;By-line;Artist;XPArtist",
     "priseDeVue":"Create Date;Date Created;Create Date;Date Time Original",
     "copyright":"Rights;CopyrightNotice;Copyright",
-    "largeur":"Image Width",
-    "hauteur":"Image Height",
+    "largeur":"Image Width;Exif Image Width",
+    "hauteur":"Image Height;Exif Image Height",
     "dateDacquisition":"Date Acquired",
     "rsolutionHorizontale":"X Resolution",
     "rsolutionVerticale":"Y Resolution"
@@ -45,14 +45,73 @@ EOF
 # Main program                                             #
 ############################################################
 ############################################################
+format_date="+"%Y-%m-%d %H:%M""
 current_parent_pid=$$
 OIFS="$IFS"
 IFS=$'\n'
 
+formatted_date() {
+"spmtbV2.sh" 447L, 17266C written
+[root@app-hq-rcl-001 metadataV2]# cat spmtbV2.sh
+#!/usr/bin/env bash
+############################################################
+# Help                                                     #
+############################################################
+Help()
+{
+   # Display Help
+   echo "The script will work on a specific Box folder"
+   echo "to convert exif metadata to box metadata with chl-icono template."
+   echo "Syntax: scriptTemplate [-h|a|d|r]"
+   echo "options:"
+   echo "h     Print this Help."
+   echo "a     Add metadata"
+   echo "d     Delete metadata"
+   echo "r     Recursive"
+   echo "n     Number of simultaneous process"
+   echo
+}
+############################################################
+############################################################
+# CONF                                                     #
+############################################################
+############################################################
+source ./.config
+
+#template json metadonnée chl icono avec à droite les paramètre exiftool
+chlicone_metadata_creation_json=$( cat << EOF
+{
+    "titre":"Title;Caption-Abstract;XPTitle",
+    "objet":"Description;ImageDescription",
+    "motsCls":"Subject;Keywords;XPKeywords",
+    "auteurs":"Creator;By-line;Artist;XPArtist",
+    "priseDeVue":"Create Date;Date Created;Create Date;Date Time Original",
+    "copyright":"Rights;CopyrightNotice;Copyright",
+    "largeur":"Image Width;Exif Image Width",
+    "hauteur":"Image Height;Exif Image Height",
+    "dateDacquisition":"Date Acquired",
+    "rsolutionHorizontale":"X Resolution",
+    "rsolutionVerticale":"Y Resolution"
+}
+EOF
+)
+############################################################
+############################################################
+# Main program                                             #
+############################################################
+############################################################
+format_date="+"%Y-%m-%d %H:%M""
+current_parent_pid=$$
+OIFS="$IFS"
+IFS=$'\n'
+
+formatted_date() {
+        date +"%Y-%M-%d %H:%m"
+}
 clean_up_all(){
         ps aux | grep -ie ${0##*/} | grep -v $current_parent_pid | awk '{print $2}' | xargs kill -9
         sleep 3
-        echo $(date) "######## Arrêt manuel du script pour le dossier $parent_folder_id" >> $insert_metadata_logfile
+        echo $(formatted_date) "######## Arrêt manuel du script pour le dossier $parent_folder_id" >> $insert_metadata_logfile
         kill -9 $current_parent_pid
 }
 
@@ -92,7 +151,7 @@ request_to_api_box(){
                                          task="LIST_${offset}_OFFSET"
                                 fi
                         #        http_response_code=$(curl -w "%{http_code}" -o $temp_path/folder_$folder_id -s -X GET "https://api.box.com/2.0/folders/$folder_id/items?limit=$box_search_limit_result&fields=id,type,name,metadata.$scope.$metadata_template" \
-                                 http_response_code=$(curl -w "%{http_code}" -o $curl_output_opts -s -X GET "https://api.box.com/2.0/folders/$folder_id/items?offset=$offset&limit=$box_search_limit_result&fields=id,type,name,metadata.$scope.$metadata_template" \
+                                 http_response_code=$(curl -w "%{http_code}" -o $curl_output_opts -s -X GET "https://api.box.com/2.0/folders/$folder_id/items?offset=$offset&limit=$box_search_limit_result&fields=id,type,name,size,metadata.$scope.$metadata_template" \
                                                       -H "Authorization: Bearer $token")
                         ;;
                         "CHECK")
@@ -136,7 +195,8 @@ request_to_api_box(){
 check_metadata_in_box() {
         task="CHECK"
         file_id=$1
-        file_box_metadata=$2
+        download_type=$2
+        file_box_metadata=$3
         metadata_check_number=$(echo ${file_box_metadata} |  jq '.'\"$scope\"'.'\"$metadata_template\"''  | jq length )
         #http_response=$(request_to_api_box $task $file_id)
         #metadata_check_number=$(echo ${http_response} | awk '{print $1}')
@@ -152,13 +212,13 @@ check_metadata_in_box() {
         fi
         case $metadata_check_number in
                 8) #cas metadata sur box vide
-                        remove_metadata_from_file $file_id && download_photo_from_box $file_id &
+                        remove_metadata_from_file $file_id && download_photo_from_box $file_id $download_type &
                 ;;
                 0)
-                        download_photo_from_box $file_id &
+                        download_photo_from_box $file_id $download_type &
                 ;;
                 "recreate")
-                        remove_metadata_from_file $file_id && download_photo_from_box $file_id &
+                        remove_metadata_from_file $file_id && download_photo_from_box $file_id $download_type &
 
                 ;;
                 *) #autres cas
@@ -166,14 +226,14 @@ check_metadata_in_box() {
 
                 #       if [ $metadata_diff -eq 6 ]; then
                 #               #cas nb metadata photo = nb metadata box
-                #               echo $(date) "$file_id has equal metadatas as box metadata.">> $insert_metadata_logfile
+                #               echo $(formatted_date) "$file_id has equal metadatas as box metadata.">> $insert_metadata_logfile
                 #       elif [ $metadata_diff -gt 6 ]; then
-                #               echo $(date) "$file_id has less metadatas than box metadata.">> $insert_metadata_logfile
+                #               echo $(formatted_date) "$file_id has less metadatas than box metadata.">> $insert_metadata_logfile
                 #       elif [ $metadata_diff -lt 6 ] && [ $metadata_diff -gt 0 ] ; then
-                #               echo $(date) "$file_id has more metadatas than box metadata.">> $insert_metadata_logfile
+                #               echo $(formatted_date) "$file_id has more metadatas than box metadata.">> $insert_metadata_logfile
                 #               remove_metadata_from_file $file_id &&  download_photo_from_box $file_id &
                 #       elif [  $metadata_diff -lt 0 ]; then
-                #               echo $(date) "$file_id has no box metadata chlicono template.">> $insert_metadata_logfile
+                #               echo $(formatted_date) "$file_id has no box metadata chlicono template.">> $insert_metadata_logfile
                 #       fi
                 ;;
         esac
@@ -187,28 +247,28 @@ test_http_response(){
         used_token=$5
         case $http_code in
                 201)
-                        echo $(date) "code http 201 : metadata $metadata_template created on file during $task$retry $file_id $used_token"  >> $insert_metadata_logfile
+                        echo $(formatted_date) "code http 201 : metadata $metadata_template created on file during $task$retry $file_id $used_token"  >> $insert_metadata_logfile
                 ;;
                 204)
-                        echo $(date) "code http 204 : metadata $metadata_template deleted for file during $task$retry $file_id $used_token" >> $insert_metadata_logfile
+                        echo $(formatted_date) "code http 204 : metadata $metadata_template deleted for file during $task$retry $file_id $used_token" >> $insert_metadata_logfile
                 ;;
                 206)
-                        echo $(date) "code http 206 : file HEADER downloaded on box during $task$retry $file_id $used_token" >> $insert_metadata_logfile
+                        echo $(formatted_date) "code http 206 : file HEADER downloaded on box during $task$retry $file_id $used_token" >> $insert_metadata_logfile
                 ;;
                 404)
-                        echo $(date) "error http 404 : metadata $metadata_template not existing on file during $task$retry $file_id $used_token" >> $insert_metadata_logfile
+                        echo $(formatted_date) "error http 404 : metadata $metadata_template not existing on file during $task$retry $file_id $used_token" >> $insert_metadata_logfile
                 ;;
                 401)
-                        echo $(date) "error http 401 : access forbidden during $task$retry $file_id $used_token">> $insert_metadata_logfile
+                        echo $(formatted_date) "error http 401 : access forbidden during $task$retry $file_id $used_token">> $insert_metadata_logfile
                 ;;
                 409)
-                        echo $(date) "error http 409 : metadata $metadata_template already existing for file during $task$retry $file_id $used_token">> $insert_metadata_logfile
+                        echo $(formatted_date) "error http 409 : metadata $metadata_template already existing for file during $task$retry $file_id $used_token">> $insert_metadata_logfile
                 ;;
                 429)
-                        echo $(date) "error http 429 : Too Many Requests file during $task$retry $file_id $used_token" >> $insert_metadata_logfile
+                        echo $(formatted_date) "error http 429 : Too Many Requests file during $task$retry $file_id $used_token" >> $insert_metadata_logfile
                 ;;
                 *)
-                        echo $(date) "code $http_code : ressource $file_id during $task$retry $used_token" >> $insert_metadata_logfile
+                        echo $(formatted_date) "code $http_code : ressource $file_id during $task$retry $used_token" >> $insert_metadata_logfile
                 ;;
         esac
 }
@@ -254,12 +314,12 @@ create_metadata_on_file() {
 
                 if [[ $(cat $metadata_box_json | wc -l) -eq 2 ]]
                 then
-                        echo $(date) "json $file_id is empty " >> $insert_metadata_logfile
+                        echo $(formatted_date) "json $file_id is empty " >> $insert_metadata_logfile
                 else
                         http_response=$(request_to_api_box $task $file_id)
                 fi
         else
-                echo $(date) "file $file_id is not a picture " >> $insert_metadata_logfile
+                echo $(formatted_date) "file $file_id is not a picture " >> $insert_metadata_logfile
         fi
         rm $temp_path/$file_id
 }
@@ -268,6 +328,8 @@ create_metadata_on_file() {
 download_photo_from_box(){
         task="DOWNLOAD"
         file_id=$1
+        download_type=$2
+        [[ $download_type == "full" ]] && task="FULL_DOWNLOAD"
         http_response=$(request_to_api_box $task $file_id)
         create_metadata_on_file $file_id
 }
@@ -291,13 +353,13 @@ list_items_in_box_folder(){
                         http_response=$(request_to_api_box $task $folder_id $offset)
                         echo $number_result
                 done
-                 cat $temp_path/folder_$folder_id |  jq -r '.entries[] | "\(.type);\(.id);\(.name);;;;;\(.metadata)"' > $temp_path/folder_${folder_id}_all
+                cat $temp_path/folder_$folder_id |  jq -r '.entries[] | "\(.type);\(.id);\(.name);\(.size);;;;;\(.metadata)"' > $temp_path/folder_${folder_id}_all
                 for curl_offset_result in `ls $temp_path/folder_${folder_id}_offset_*`; do
-                         cat  $curl_offset_result  |  jq -r '.entries[] | "\(.type);\(.id);\(.name);;;;;\(.metadata)"'  >> $temp_path/folder_${folder_id}_all
+                        cat  $curl_offset_result  |  jq -r '.entries[] | "\(.type);\(.id);\(.name);\(.size);;;;;\(.metadata)"'  >> $temp_path/folder_${folder_id}_all
                 done
                 cat $temp_path/folder_${folder_id}_all
         else
-        cat $temp_path/folder_$folder_id |  jq -r '.entries[] | "\(.type);\(.id);\(.name);;;;;\(.metadata)"'
+                cat $temp_path/folder_$folder_id |  jq -r '.entries[] | "\(.type);\(.id);\(.name);\(.size);;;;;\(.metadata)"'
         fi
 }
 
@@ -308,15 +370,15 @@ refresh_token() {
          token_generated=$(cat $temp_path/refresh_token_response| grep -oP ":\"\K[\d\D]*" | cut -d"\"" -f1)
          echo "$refresh_token_generated" > refresh_token_file
          echo "$token_generated;G" > token_file
-         echo $(date) " refresh token refreshed"  >> $insert_metadata_logfile
-         echo $(date) " token refreshed"  >> $insert_metadata_logfile
+         echo $(formatted_date) " refresh token refreshed"  >> $insert_metadata_logfile
+         echo $(formatted_date) " token refreshed"  >> $insert_metadata_logfile
 }
 refresh_token_loop() {
         while :; do
                 refresh_token
                 sleep $(expr $token_refresh_rate_in_sec - $token_red_period_in_sec)
                 sed -i "s/;G/;R/g" token_file
-                echo $(date) " token status RED"  >> $insert_metadata_logfile
+                echo $(formatted_date) " token status RED"  >> $insert_metadata_logfile
                 sleep $token_red_period_in_sec
         done
 }
@@ -365,16 +427,16 @@ done
 [ $OPTIND -eq 1 ] && Help && exit
 
 trap clean_up_all SIGINT SIGQUIT
-echo $(date)
+echo $(formatted_date)
 echo "number of processus: $num_procs"
 echo "action : $action"
 echo "recursive: $recursive"
 echo "current PID: $current_parent_pid"
-echo $(date) "######## Début du script pour le dossier $parent_folder_id" >> $insert_metadata_logfile
-echo $(date) "number of processus: $num_procs " >> $insert_metadata_logfile
-echo $(date) "action : $action " >> $insert_metadata_logfile
-echo $(date) "recursive: $recursive " >> $insert_metadata_logfile
-echo $(date) "current PID: $current_parent_pid " >> $insert_metadata_logfile
+echo $(formatted_date) "######## Début du script pour le dossier $parent_folder_id" >> $insert_metadata_logfile
+echo $(formatted_date) "number of processus: $num_procs " >> $insert_metadata_logfile
+echo $(formatted_date) "action : $action " >> $insert_metadata_logfile
+echo $(formatted_date) "recursive: $recursive " >> $insert_metadata_logfile
+echo $(formatted_date) "current PID: $current_parent_pid " >> $insert_metadata_logfile
 
 mkdir $temp_path 2> /dev/null
 
@@ -404,7 +466,8 @@ scan_box_folder(){
 
                                 filename=$(basename -- "$item_name")
                                 extension=".${filename##*.}"
-                                [[ $(echo $excluded_file_extension | grep -i $extension) ]] &&  echo $(date) "excluded file : $item_id by rules with $extension extension"  >> $insert_metadata_logfile && continue
+                                [[ $(echo $excluded_file_extension | grep -i $extension) ]] &&  echo $(formatted_date) "excluded file : $item_id by rules with $extension extension"  >> $insert_metadata_logfile && continue
+                                [[ $(echo $required_full_download_file_extension | grep -i $extension) ]] &&  download_type="full" ||  download_type="header"
                                 case $action in
                                         "no")
                                                 echo "please precise action"
@@ -413,7 +476,7 @@ scan_box_folder(){
                                                 echo "you can't add and delete at the same time"
                                         ;;
                                         "add")
-                                                check_metadata_in_box $item_id ${item_box_metadata}
+                                                check_metadata_in_box $item_id $download_type ${item_box_metadata}
 
                                         ;;
                                         "delete")
@@ -423,10 +486,10 @@ scan_box_folder(){
                         ;;
                 esac
         done
+wait $(jobs -rp | grep -v $refresh_token_loop_pid)
 }
 
 scan_box_folder $parent_folder_id
 
-wait $(jobs -rp | grep -v $refresh_token_loop_pid)
 kill $refresh_token_loop_pid
-echo $(date) "######## Fin du script pour le dossier $parent_folder_id" >> $insert_metadata_logfile
+echo $(formatted_date) "######## Fin du script pour le dossier $parent_folder_id" >> $insert_metadata_logfile
